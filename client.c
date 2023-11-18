@@ -7,6 +7,28 @@
 
 #include "utils.h"
 
+void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr) {
+    int n;
+    char buffer[PAYLOAD_SIZE];
+
+    while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
+        printf("[SENDING] Data: %s", buffer);
+
+        n = sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+        if (n == -1) {
+            perror("Error sending data to the server");
+            return;
+        }
+        bzero(buffer, PAYLOAD_SIZE);
+    }
+
+    strcpy(buffer, "END");
+    sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+
+    fclose(fp);
+    return;
+
+}
 
 int main(int argc, char *argv[]) {
     int listen_sockfd, send_sockfd;
@@ -71,8 +93,10 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: Read from file, and initiate reliable data transfer to the server
+    send_file_data(fp, send_sockfd, server_addr_to);
 
- 
+    printf("[SUCCES] Sending file to server\n");
+    printf("[CLOSING] Disconnecting from server\n");
     
     fclose(fp);
     close(listen_sockfd);
