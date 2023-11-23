@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Open file for reading
-    FILE *fp = fopen(filename, "rb");
+    FILE *fp = fopen(filename, "r");
     if (fp == NULL) {
         perror("Error opening file");
         close(listen_sockfd);
@@ -93,7 +93,21 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: Read from file, and initiate reliable data transfer to the server
-    send_file_data(fp, send_sockfd, server_addr_to);
+    int n;
+
+    while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
+        printf("[SENDING] Data: %s", buffer);
+
+        n = sendto(send_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
+        if (n == -1) {
+            perror("Error sending data to the server");
+            return 1;
+        }
+        bzero(buffer, PAYLOAD_SIZE);
+    }
+
+    strcpy(buffer, "END");
+    sendto(send_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
 
     printf("[SUCCES] Sending file to server\n");
     printf("[CLOSING] Disconnecting from server\n");
