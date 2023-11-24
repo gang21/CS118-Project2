@@ -35,16 +35,19 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
     while(1){
         addr_size = sizeof(addr);
         n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
+        printRecv(&pkt);
         if (pkt.last == 1) {
             break; 
         }
-
-        printf("[RECEIVING] Data: %s", pkt.payload);
+        if (pkt.acknum < ack_num) {   //dup ACK
+            send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
+            continue;
+        }
         fprintf(fp, "%s", pkt.payload);
+        send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
         // bzero(buffer, PAYLOAD_SIZE);
 
         //receive packet data, send ACK num
-        send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
 
         ack_num += 1;
 
