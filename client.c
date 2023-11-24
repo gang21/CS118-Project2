@@ -14,8 +14,8 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr) {
     struct packet pkt;
     int n;
     struct timeval  timeout;
-    timeout.tv_sec = 1;    // wait 1 seconds
-    timeout.tv_usec = 0;   // wait 0 milliseconds
+    timeout.tv_sec = 0;    // wait 1 seconds
+    timeout.tv_usec = 50000;   // wait 0 milliseconds
     
     while(1) {
         setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
@@ -87,13 +87,13 @@ int main(int argc, char *argv[]) {
     int listen_sockfd, send_sockfd;
     struct sockaddr_in client_addr, server_addr_to, server_addr_from;
     socklen_t addr_size = sizeof(server_addr_to);
-    struct packet pkt;
-    struct packet ack_pkt;
-    char buffer[PAYLOAD_SIZE];
-    unsigned short seq_num = 0;
-    unsigned short ack_num = 0;
-    char last = 0;
-    char ack = 0;
+    // struct packet pkt;
+    // struct packet ack_pkt;
+    // char buffer[PAYLOAD_SIZE];
+    // unsigned short seq_num = 0;
+    // unsigned short ack_num = 0;
+    // char last = 0;
+    // char ack = 0;
 
     // read filename from command line argument
     if (argc != 2) {

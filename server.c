@@ -39,18 +39,21 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
         if (pkt.last == 1) {
             break; 
         }
-        if (pkt.acknum < ack_num) {   //dup ACK
-            send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
-            continue;
+        // if (pkt.acknum == 0 && seq_num == 0) {     //first pkt not a dup
+        //     fprintf(fp, "%s", pkt.payload);
+        //     send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
+        //     ack_num = pkt.acknum;
+        //     seq_num = pkt.seqnum+1;
+        //     continue;
+        // }
+        if (pkt.seqnum >= seq_num) {    //not a dup ACK
+            fprintf(fp, "%s", pkt.payload);
         }
-        fprintf(fp, "%s", pkt.payload);
-        send_ack(send_sockfd, client_addr_to, ack_num, seq_num+1);
-        // bzero(buffer, PAYLOAD_SIZE);
+        send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
 
-        //receive packet data, send ACK num
-
-        ack_num++;
-        seq_num++;
+        //update ACK and SEQ number
+        ack_num = pkt.acknum;
+        seq_num = pkt.seqnum+1;
 
     }
 
