@@ -8,29 +8,33 @@
 #include "utils.h"
 
 int listen_for_ack(int sockfd, struct sockaddr_in addr) {
-    int addr_size = sizeof(addr);
+    socklen_t addr_size = sizeof(addr);
     char buffer[PAYLOAD_SIZE];
+    struct packet pkt;
     int n;
     
     while(1) {
-        n = recvfrom(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, &addr_size);
+        n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
         if (n == -1) {
             perror("Error receiving ACK from server\n");
             return -1;
         }
-        return *(unsigned int*)(buffer);
+        return pkt.acknum;
     }
 }
 
 void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, struct sockaddr_in server_addr_from) {
     int n;
     char buffer[PAYLOAD_SIZE];
-    int ack_num = 0;
+    int seq_no = 0;
+    int ack_no = 0;
 
     while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
         printf("[SENDING] Data: %s", buffer);
+        struct packet pkt;
+        build_packet(&pkt, seq_no, ack_no, 0, 0, PAYLOAD_SIZE, buffer);
 
-        n = sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+        n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
         if (n == -1) {
             perror("Error sending data to the server");
             return;
@@ -39,11 +43,15 @@ void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_s
 
         //wait for ACK
         int ack = listen_for_ack(listen_sockfd, server_addr_from);
-        printf("[Received] ACK: %d\n", ack);
+        printf("[RECEIVED] ACK: %d\n", ack);
+
+        seq_no++;
+        ack_no++;
     }
 
-    strcpy(buffer, "END");
-    sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+    struct packet last_packet;
+    build_packet(&last_packet, seq_no, ack_no, 1, 0, PAYLOAD_SIZE, buffer);
+    sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
 
     fclose(fp);
     return;

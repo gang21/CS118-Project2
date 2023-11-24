@@ -6,14 +6,16 @@
 
 #include "utils.h"
 
-void send_ack(int sockfd, struct sockaddr_in addr, int ack_num) {
+void send_ack(int sockfd, struct sockaddr_in addr, unsigned short ack_num, unsigned short seq_num) {
     int n;
     char buffer[PAYLOAD_SIZE];
     memcpy(buffer, (char*)&ack_num, sizeof(unsigned int));
+    struct packet pkt;
+    build_packet(&pkt, seq_num, ack_num, 0, 1, PAYLOAD_SIZE, buffer);
 
     printf("Sending ACK: %d\n", ack_num);
 
-    n = sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+    n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
     if (n == -1) {
         perror("Error sending ACK to the client");
         return;
@@ -24,23 +26,25 @@ void send_ack(int sockfd, struct sockaddr_in addr, int ack_num) {
 
 void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_sockfd, struct sockaddr_in client_addr_to) {
     int n;
-    char buffer[PAYLOAD_SIZE];
+    // char buffer[PAYLOAD_SIZE];
     socklen_t addr_size;
     int ack_num = 0;
+    int seq_num = 0;
+    struct packet pkt;
 
     while(1){
         addr_size = sizeof(addr);
-        n = recvfrom(listen_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, &addr_size);
-        if (strcmp(buffer, "END") == 0) {
+        n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
+        if (pkt.last == 1) {
             break; 
         }
 
-        printf("[RECEIVING] Data: %s", buffer);
-        fprintf(fp, "%s", buffer);
-        bzero(buffer, PAYLOAD_SIZE);
+        printf("[RECEIVING] Data: %s", pkt.payload);
+        fprintf(fp, "%s", pkt.payload);
+        // bzero(buffer, PAYLOAD_SIZE);
 
         //receive packet data, send ACK num
-        send_ack(send_sockfd, client_addr_to, ack_num);
+        send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
 
         ack_num += 1;
 
@@ -96,7 +100,6 @@ int main() {
     FILE *fp = fopen("output.txt", "wb");
 
     // TODO: Receive file from the client and save it as output.txt
-    printf("WE GOT HERE\n");
     write_file(listen_sockfd, client_addr_from, fp, send_sockfd, client_addr_to);
 
     printf("[SUCCES] File Transfer Complete\n");
