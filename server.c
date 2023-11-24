@@ -6,24 +6,43 @@
 
 #include "utils.h"
 
-void write_file(int sockfd, struct sockaddr_in addr, FILE *fp) {
+void send_ack(int sockfd, struct sockaddr_in addr, int ack_num) {
+    int n;
+    char buffer[PAYLOAD_SIZE];
+    memcpy(buffer, (char*)&ack_num, sizeof(unsigned int));
+
+    printf("Sending ACK: %d\n", ack_num);
+
+    n = sendto(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+    if (n == -1) {
+        perror("Error sending ACK to the client");
+        return;
+    }
+    bzero(buffer, PAYLOAD_SIZE);
+    return;
+}
+
+void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_sockfd, struct sockaddr_in client_addr_to) {
     int n;
     char buffer[PAYLOAD_SIZE];
     socklen_t addr_size;
-    printf("WE R IN THIS FUNC\n");
+    int ack_num = 0;
+
     while(1){
         addr_size = sizeof(addr);
-        printf("IN THE WHILE LOOP\n");
-        n = recvfrom(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, &addr_size);
-        printf("N HAS BEEN RECEIVED: %d", n);
+        n = recvfrom(listen_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, &addr_size);
         if (strcmp(buffer, "END") == 0) {
             break; 
-            return;
         }
 
         printf("[RECEIVING] Data: %s", buffer);
         fprintf(fp, "%s", buffer);
         bzero(buffer, PAYLOAD_SIZE);
+
+        //receive packet data, send ACK num
+        send_ack(send_sockfd, client_addr_to, ack_num);
+
+        ack_num += 1;
 
     }
 
@@ -78,7 +97,7 @@ int main() {
 
     // TODO: Receive file from the client and save it as output.txt
     printf("WE GOT HERE\n");
-    write_file(listen_sockfd, client_addr_from, fp);
+    write_file(listen_sockfd, client_addr_from, fp, send_sockfd, client_addr_to);
 
     printf("[SUCCES] File Transfer Complete\n");
     printf("[CLOSING] Closing server\n");

@@ -7,9 +7,25 @@
 
 #include "utils.h"
 
-void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr) {
+int listen_for_ack(int sockfd, struct sockaddr_in addr) {
+    int addr_size = sizeof(addr);
+    char buffer[PAYLOAD_SIZE];
+    int n;
+    
+    while(1) {
+        n = recvfrom(sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, &addr_size);
+        if (n == -1) {
+            perror("Error receiving ACK from server\n");
+            return -1;
+        }
+        return *(unsigned int*)(buffer);
+    }
+}
+
+void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, struct sockaddr_in server_addr_from) {
     int n;
     char buffer[PAYLOAD_SIZE];
+    int ack_num = 0;
 
     while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
         printf("[SENDING] Data: %s", buffer);
@@ -20,6 +36,10 @@ void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr) {
             return;
         }
         bzero(buffer, PAYLOAD_SIZE);
+
+        //wait for ACK
+        int ack = listen_for_ack(listen_sockfd, server_addr_from);
+        printf("[Received] ACK: %d\n", ack);
     }
 
     strcpy(buffer, "END");
@@ -93,21 +113,7 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: Read from file, and initiate reliable data transfer to the server
-    int n;
-
-    while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
-        printf("[SENDING] Data: %s", buffer);
-
-        n = sendto(send_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
-        if (n == -1) {
-            perror("Error sending data to the server");
-            return 1;
-        }
-        bzero(buffer, PAYLOAD_SIZE);
-    }
-
-    strcpy(buffer, "END");
-    sendto(send_sockfd, buffer, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
+    send_file_data(fp, send_sockfd, server_addr_to, listen_sockfd, server_addr_from);
 
     printf("[SUCCES] Sending file to server\n");
     printf("[CLOSING] Disconnecting from server\n");
