@@ -25,7 +25,7 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr) {
             return -1;
         }
         if (n) {    // received ACK
-            printf("[RECEIVED] ACK: %d\n", pkt.acknum);
+            printRecv(&pkt);
             return pkt.acknum;
         }
         // else {

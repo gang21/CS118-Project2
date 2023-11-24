@@ -44,12 +44,13 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
             continue;
         }
         fprintf(fp, "%s", pkt.payload);
-        send_ack(send_sockfd, client_addr_to, ack_num, seq_num);
+        send_ack(send_sockfd, client_addr_to, ack_num, seq_num+1);
         // bzero(buffer, PAYLOAD_SIZE);
 
         //receive packet data, send ACK num
 
-        ack_num += 1;
+        ack_num++;
+        seq_num++;
 
     }
 
