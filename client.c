@@ -14,8 +14,8 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr) {
     struct packet pkt;
     int n;
     struct timeval  timeout;
-    timeout.tv_sec = 0;    // wait 1 seconds
-    timeout.tv_usec = 50000;   // wait 0 milliseconds
+    timeout.tv_sec = 0;    // wait 0 seconds
+    timeout.tv_usec = 10000;   // wait 5000 milliseconds
     
     while(1) {
         setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
@@ -28,10 +28,6 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr) {
             printRecv(&pkt);
             return pkt.acknum;
         }
-        // else {
-        //     printf("TIMEOUT HAS OCCURED - resending packet\n");
-        //     return -1;
-        // }
         return pkt.acknum;
     }
 }
@@ -55,8 +51,9 @@ void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_s
         bzero(buffer, PAYLOAD_SIZE);
 
         //wait for ACK
+        int ack = -1;
         while(1) {
-            int ack = listen_for_ack(listen_sockfd, server_addr_from);
+            ack = listen_for_ack(listen_sockfd, server_addr_from);
             if (ack == -1) {    //error - resend data
                 printSend(&pkt, 1);
                 n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
@@ -76,7 +73,20 @@ void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_s
 
     struct packet last_packet;
     build_packet(&last_packet, seq_no, ack_no, 1, 0, PAYLOAD_SIZE, buffer);
+    int ack = -1;
     sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+    while(1) {
+        ack = listen_for_ack(listen_sockfd, server_addr_from);
+        if (ack == -1) {    // error - resend data
+            printSend(&last_packet, 1);
+            n = sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+            if (n == -1) {
+                    perror("Error sending data to the server");
+                    return;
+                }
+                continue;
+        }
+    }
 
     fclose(fp);
     return;

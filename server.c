@@ -37,6 +37,7 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
         n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
         printRecv(&pkt);
         if (pkt.last == 1) {
+            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
             break; 
         }
         // if (pkt.acknum == 0 && seq_num == 0) {     //first pkt not a dup
