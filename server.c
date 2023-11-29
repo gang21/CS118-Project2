@@ -13,7 +13,7 @@ void send_ack(int sockfd, struct sockaddr_in addr, unsigned short ack_num, unsig
     struct packet pkt;
     build_packet(&pkt, seq_num, ack_num, 0, 1, PAYLOAD_SIZE, buffer);
 
-    printf("Sending ACK: %d\n", ack_num);
+    // printf("Sending ACK: %d\n", ack_num);
 
     n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
     if (n == -1) {
@@ -35,9 +35,9 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
     while(1){
         addr_size = sizeof(addr);
         n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
-        printRecv(&pkt);
+        // printRecv(&pkt);
         if (pkt.last == 1) {
-            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
+            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
             break; 
         }
         // if (pkt.acknum == 0 && seq_num == 0) {     //first pkt not a dup
@@ -47,13 +47,31 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
         //     seq_num = pkt.seqnum+1;
         //     continue;
         // }
-        if (pkt.seqnum >= seq_num) {    //not a dup ACK
+        printf("RECV-------------\n");
+        printf("rec seq: %d\n", pkt.seqnum);
+        printf("rec ack: %d\n", pkt.acknum);
+        printf("svr seq: %d\n", seq_num);
+        printf("svr ack: %d\n", ack_num);
+        if (pkt.seqnum == seq_num) {    //not a dup ACK
             fprintf(fp, "%s", pkt.payload);
         }
-        send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
+        else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
+            printf("-------------UNDER ACK\n");
+            fprintf(fp, "%s", pkt.payload);
+            // ack_num = pkt.acknum;
+            // seq_num = pkt.seqnum;
+
+        }
+        else if (pkt.seqnum < seq_num) {     // dup ack don't output file
+            printf("---------------DUP ACK\n");
+            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
+            continue;
+        }
+        // fprintf(fp, "%s", pkt.payload);
+        send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
 
         //update ACK and SEQ number
-        ack_num = pkt.acknum;
+        ack_num = pkt.acknum+1;
         seq_num = pkt.seqnum+1;
 
     }
