@@ -56,7 +56,6 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
             fprintf(fp, "%s", pkt.payload);
         }
         else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
-            printf("-------------UNDER ACK\n");
             fprintf(fp, "%s", pkt.payload);
             // ack_num = pkt.acknum;
             // seq_num = pkt.seqnum;
