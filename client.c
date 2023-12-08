@@ -15,7 +15,7 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr) {
     int n;
     struct timeval  timeout;
     timeout.tv_sec = 0;    // wait 0 seconds
-    timeout.tv_usec = 1000;   // wait 4000 milliseconds
+    timeout.tv_usec = 4000;   // wait 4000 milliseconds
     
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
     n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
