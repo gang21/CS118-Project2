@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror
+USERID=005677251
 
 all: clean build
 
@@ -13,4 +14,4 @@ clean:
 	rm -f server client output.txt
 
 zip: clean
-	zip ${USERID}.zip server.c client.c Makefile
+	zip ${USERID}.zip server.c client.c Makefile report.txt utils.h
