@@ -12,8 +12,7 @@ void send_ack(int sockfd, struct sockaddr_in addr, unsigned short ack_num, unsig
     memcpy(buffer, (char*)&ack_num, sizeof(unsigned int));
     struct packet pkt;
     build_packet(&pkt, seq_num, ack_num, 0, 1, PAYLOAD_SIZE, buffer);
-
-    // printf("Sending ACK: %d\n", ack_num);
+    printf("ACKNUM to send: %d\n", pkt.acknum);
 
     n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
     if (n == -1) {
@@ -52,10 +51,13 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
         printf("rec ack: %d\n", pkt.acknum);
         printf("svr seq: %d\n", seq_num);
         printf("svr ack: %d\n", ack_num);
+        printf("data received: %s\n", pkt.payload);
         if (pkt.seqnum == seq_num) {    //not a dup ACK
+            printf("packet payload: %s", pkt.payload);
             fprintf(fp, "%s", pkt.payload);
         }
         else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
+            continue;
             fprintf(fp, "%s", pkt.payload);
             // ack_num = pkt.acknum;
             // seq_num = pkt.seqnum;
