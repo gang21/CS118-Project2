@@ -124,7 +124,8 @@ int get_file_num_lines(FILE *fp) {
         }
     }
     //rewind file for reading
-    fseek(fp, 0, SEEK_SET);
+    // fseek(fp, 0, SEEK_SET);
+    rewind(fp);
     return lines;
 }
 
@@ -153,6 +154,7 @@ void aimd(FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, stru
     int window_size = (int)cwnd;
     int first_seq_of_window = 0;
     int file_size = get_file_num_lines(fp);
+    // int file_size = 5;
     printf("file size: %d\n", file_size);
     fseek(fp, 0, SEEK_SET);
     char buffer[file_size][PAYLOAD_SIZE];
