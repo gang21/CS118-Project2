@@ -83,11 +83,15 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
 int main() {
     int listen_sockfd, send_sockfd;
     struct sockaddr_in server_addr, client_addr_from, client_addr_to;
-    struct packet buffer;
+    // struct packet buffer;
     socklen_t addr_size = sizeof(client_addr_from);
     int expected_seq_num = 0;
     int recv_len;
     struct packet ack_pkt;
+    unsigned short ack = 0;
+    unsigned short seq = 0;
+    int n;
+    char buffer[PAYLOAD_SIZE];
 
     // Create a UDP socket for sending
     send_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -126,7 +130,32 @@ int main() {
     FILE *fp = fopen("output.txt", "wb");
 
     // TODO: Receive file from the client and save it as output.txt
-    write_file(listen_sockfd, client_addr_from, fp, send_sockfd, client_addr_to);
+    // write_file(listen_sockfd, client_addr_from, fp, send_sockfd, client_addr_to);
+    while(1) {
+        //receive from client
+        n = recvfrom(listen_sockfd, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&client_addr_from, &addr_size);
+        if (n == -1) {
+            perror("Error sending ACK to the client");
+            return -1;
+        }
+        //check if last packet
+        if (ack_pkt.last == 1) {
+            break;
+        }
+
+        //check if correct ack -- write to file
+        if (ack_pkt.acknum == ack) {
+            printf("payload received: %s\n", ack_pkt.payload);
+            strcpy(buffer, ack_pkt.payload);
+            fwrite(buffer, 1, strlen(buffer), fp);
+            if (ack == 0) {
+                ack = 1;
+            }
+            else {
+                ack = 0;
+            }
+        }
+    }
 
     printf("[SUCCES] File Transfer Complete\n");
     printf("[CLOSING] Closing server\n");

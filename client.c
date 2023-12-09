@@ -98,13 +98,17 @@ int main(int argc, char *argv[]) {
     int listen_sockfd, send_sockfd;
     struct sockaddr_in client_addr, server_addr_to, server_addr_from;
     socklen_t addr_size = sizeof(server_addr_to);
-    // struct packet pkt;
+    struct packet pkt;
     // struct packet ack_pkt;
-    // char buffer[PAYLOAD_SIZE];
-    // unsigned short seq_num = 0;
-    // unsigned short ack_num = 0;
+    char buffer[PAYLOAD_SIZE];
+    unsigned short seq_num = 0;
+    unsigned short ack_num = 0;
     // char last = 0;
     // char ack = 0;
+    struct timeval  timeout;
+    timeout.tv_sec = 0;    // wait 0 seconds
+    timeout.tv_usec = 500000;   // wait 4000 milliseconds
+    int n;
 
     // read filename from command line argument
     if (argc != 2) {
@@ -156,7 +160,86 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: Read from file, and initiate reliable data transfer to the server
-    send_file_data(fp, send_sockfd, server_addr_to, listen_sockfd, server_addr_from);
+    // send_file_data(fp, send_sockfd, server_addr_to, listen_sockfd, server_addr_from);
+    while(fread(buffer, 1, sizeof(buffer), fp) != 0) {
+        // build package
+        build_packet(&pkt, seq_num, ack_num, 0, 0, PAYLOAD_SIZE, buffer);
+        while(1) {
+            //send package
+            n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
+            printf("data sent: %s", buffer);
+            if (n == -1) {
+                perror("Error sending data to the server");
+                return -1;
+            }
+            break;
+        }
+    }
+
+    // while(1) {
+    //     //read from buffer
+    //     size_t bytesRead = fread(buffer, 1, sizeof(buffer), fp);
+    //     if (bytesRead == 0)
+    //         break;
+    //     //build packet
+    //     build_packet(&pkt, seq_num, ack_num, 0, 0, PAYLOAD_SIZE, buffer);
+    //     printf("data to send: %s\n", buffer);
+    //     printf("--------------------\n");
+    //     n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
+    //     if (n = -1) {
+    //         perror("Error sending to server\n");
+    //         return -1;
+        // }
+        //send & wait for ACK    
+        // while(1) {
+        //     //send packet
+        //     n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
+        //     if (n = -1) {
+        //         perror("Error sending to server\n");
+        //         return -1;
+        //     }
+        //     printf("packet sent\n");
+        //     //set timeout 
+        //     setsockopt(listen_sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+        //     //listen for ack
+        //     n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_from, sizeof(server_addr_from));
+        //     if (n < 0) {
+        //         perror("Error receiving ACK from server\n");
+        //         return -1;
+        //     }
+        //     printf("ack: %d\n", pkt.acknum);
+        //     //received correct ack
+        //     if (pkt.acknum == ack_num) {
+        //         if (ack_num == 0) {
+        //             ack_num = 1;
+        //         }
+        //         else {
+        //             ack_num = 0;
+        //         }
+        //         break;
+        //     }
+        // }
+    // }
+    //sending the last packet 
+    struct packet last_packet;
+    build_packet(&last_packet, seq_num, ack_num, 1, 0, PAYLOAD_SIZE, buffer);
+    printf("data to send: %s\n", pkt.payload);
+    int ack = -1;
+    sendto(send_sockfd, &last_packet, sizeof(last_packet), 0, (struct sockaddr*)&server_addr_to, addr_size);
+    while(1) {
+        setsockopt(listen_sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+        n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_from, sizeof(server_addr_from));
+        if (n < 0) {    // error - resend data
+            printSend(&last_packet, 1);
+            n = sendto(send_sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, addr_size);
+            if (n == -1) {
+                perror("Error sending data to the server");
+                return -1;
+            }
+            continue;
+        }
+    }
+
 
     printf("[SUCCES] Sending file to server\n");
     printf("[CLOSING] Disconnecting from server\n");
