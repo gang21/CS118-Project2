@@ -15,37 +15,37 @@ int listen_for_ack(int sockfd, struct sockaddr_in addr, int beg_seq, int window_
     int n;
     struct timeval  timeout;
     timeout.tv_sec = 0;    // wait 0 seconds
-    timeout.tv_usec = 1000;   // wait 1000 milliseconds
+    timeout.tv_usec = 4000;   // wait 4000 microseconds
     
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-    if (beg_seq == -1) {     // stop and wait (window_size == 1)
-        n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
-        if (n < 0) {
-            perror("Error receiving ACK from server\n");
-            // return -1;
-        }
-        if (n) {    // received ACK
-            // printRecv(&pkt);
-            printf("ACK received: %d", pkt.acknum);
-            return pkt.acknum;
-        }
-    return pkt.acknum;
-    }
+    // if (beg_seq == -1) {     // stop and wait (window_size == 1)
+    //     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+    //     n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
+    //     if (n < 0) {
+    //         perror("Error receiving ACK from server\n");
+    //         return -1;
+    //     }
+    //     if (n) {    // received ACK
+    //         // printRecv(&pkt);
+    //         printf("ACK received: %d", pkt.acknum);
+    //         return pkt.acknum;
+    //     }
+    // return pkt.acknum;
+    // }
     
     // aimd listen for acks for multiple packets
     for (int i = beg_seq; i < window_size + beg_seq; i++) {
+        setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
         n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);    //FIXME: for some reason this only errors (returns -1)
-        printf("expected ack: %d  | received ack: %d\n", i, pkt.acknum);
+        printf("expected ack: %d  | received ack: %d\n", i+1, pkt.acknum);
         printf("N: %d\n", n);
         if (n < 0) {
             perror("Error receiving ACK from server\n");
-            // return -1;
+            return -1;
         }
-        if (pkt.acknum != i) {   // received ACKs out of order
+        if (pkt.acknum != i+1) {   // received ACKs out of order
             printf("out of order ack\n");
-            // return -1;
+            return -1;
         } 
-        printf("ACK received: %d\n", pkt.acknum);
     }
     return beg_seq + window_size;
 }
@@ -113,20 +113,22 @@ void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_s
     return;
 }
 
-int get_file_num_lines(FILE *fp) {
-    int lines = 0;
-    int ch;
-    //count number lines
-    while(!feof(fp)) {
-        ch = fgetc(fp);
-        if(ch == '\n') {
-            lines++;
-        }
-    }
-    //rewind file for reading
-    // fseek(fp, 0, SEEK_SET);
-    rewind(fp);
-    return lines;
+long get_file_num_lines(FILE *fp) {
+    // int count = 0;
+    // char c;
+    // //count number lines
+    // for (c = getc(fp); c != EOF; c = getc(fp))
+    //     if (c == '\n') // Increment count if this character is newline
+    //         count = count + 1;
+    // //rewind file for reading
+    // // fseek(fp, 0, SEEK_SET);
+    // rewind(fp);
+    // return count;
+    fseek(fp, 0, SEEK_END); // Move the file pointer to the end of the file
+    long file_size = ftell(fp); // Get the current position of the file pointer (which is the file size)
+    fseek(fp, 0, SEEK_SET);
+
+    return (file_size/PAYLOAD_SIZE) + 1;
 }
 
 int send_multiple_packets(int sockfd, struct sockaddr_in addr, char (*buffer)[PAYLOAD_SIZE], int window_size, int seq_num, int file_size) {
@@ -137,12 +139,13 @@ int send_multiple_packets(int sockfd, struct sockaddr_in addr, char (*buffer)[PA
         // printf("data: %ssequence #: %d\n", buffer[i], seq_num+i);
         struct packet pkt;
         build_packet(&pkt, seq_num+i, seq_num+i, 0, 0, PAYLOAD_SIZE, buffer[seq_num + i]);
+        printf("data sent: %s", buffer[seq_num+i]);
         int n = sendto(sockfd, &pkt, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
         if (n == -1) {
             perror("Error sending data to the server");
             return -1;
         }
-        // sleep(100);
+        usleep(100000);
     }
     return 0;
 
@@ -154,19 +157,19 @@ void aimd(FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, stru
     int window_size = (int)cwnd;
     int first_seq_of_window = 0;
     int file_size = get_file_num_lines(fp);
-    // int file_size = 5;
-    printf("file size: %d\n", file_size);
+    printf("FILE SIZE: %d\n", file_size);
     fseek(fp, 0, SEEK_SET);
     char buffer[file_size][PAYLOAD_SIZE];
     //reading entire file into buffer
-    for (int j = 0; j <= file_size; j++) {
-        fgets(buffer[j], sizeof(buffer), fp);
-        printf("Line %d: %s", j, buffer[j]);
+    for (int j = 0; j < file_size; j++) {
+        fread(buffer[j], 1, PAYLOAD_SIZE, fp);
     }
-    printf("\n------------------------------\n");
+    //begin transmitting packets
     while(1) {
     // for (int k = 0; k < 2; k++) {
-        if (first_seq_of_window > file_size) {
+        if (first_seq_of_window >= file_size-1) {
+            printf("BREAKING OUT NOW\n");
+            printf("FILE SIZE: %d\n", file_size);
             break;
         }
         int n = send_multiple_packets(sockfd, addr, buffer, window_size, first_seq_of_window, file_size);
@@ -178,8 +181,13 @@ void aimd(FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, stru
             int ack = listen_for_ack(listen_sockfd, server_addr_from, first_seq_of_window, window_size);
             printf("ACK: %d\n", ack);
             if (ack == -1) {
+                printf("******************DIDN'T WORK OUT********************\n");
                 cwnd = cwnd/2;
                 window_size=(int)cwnd;
+                if (window_size < 1) {
+                    cwnd = 1;
+                    window_size = 1;
+                }
                 send_multiple_packets(sockfd, addr, buffer, window_size, first_seq_of_window, file_size);
             }
             else {
@@ -208,18 +216,18 @@ void aimd(FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, stru
     build_packet(&last_packet, -1, -1, 1, 0, PAYLOAD_SIZE, buffer);
     int ack = -1;
     sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
-    // while(1) {
-    //     ack = listen_for_ack(listen_sockfd, server_addr_from, -1, -1);
-    //     if (ack == -1) {    // error - resend data
-    //         printSend(&last_packet, 1);
-    //         int n = sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
-    //         if (n == -1) {
-    //             perror("Error sending data to the server");
-    //             return;
-    //         }
-    //         continue;
-    //     }
-    // }
+    while(1) {
+        ack = listen_for_ack(listen_sockfd, server_addr_from, -1, -1);
+        if (ack == -1) {    // error - resend data
+            printSend(&last_packet, 1);
+            int n = sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+            if (n == -1) {
+                perror("Error sending data to the server");
+                return;
+            }
+            continue;
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {

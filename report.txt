@@ -1,2 +1,5 @@
-Please concisely describe your congestion control scheme here.
-No need to be verbose, brief descriptions/bullet points are preferred.
+- This congestion control design utilizes dynamic batch sizes with AIMD and stop-and-wait protocol
+- it begins with a window size of 1 and increases at a rate of cwnd + (1/cwnd) for every correct sequence of acks 
+- if there is a collision/acks are out of order, the window size will decrease by a factor of cwnd/2 
+- for a given window size n, the client will send out n packets and wait for the n acks in order
+- if the acks are not received or are received out of order, the client will resend the packets

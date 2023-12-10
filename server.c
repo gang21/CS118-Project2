@@ -39,13 +39,6 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
             send_ack(send_sockfd, client_addr_to, pkt.acknum+1, pkt.seqnum+1);
             break; 
         }
-        // if (pkt.acknum == 0 && seq_num == 0) {     //first pkt not a dup
-        //     fprintf(fp, "%s", pkt.payload);
-        //     send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
-        //     ack_num = pkt.acknum;
-        //     seq_num = pkt.seqnum+1;
-        //     continue;
-        // }
         printf("RECV-------------\n");
         printf("rec seq: %d\n", pkt.seqnum);
         printf("rec ack: %d\n", pkt.acknum);
@@ -57,8 +50,11 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
             fprintf(fp, "%s", pkt.payload);
         }
         else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
+            // send_ack(send_sockfd, client_addr_to, pkt.acknum+1, pkt.seqnum+1);
+            // continue;
+            // fprintf(fp, "%s", pkt.payload);
+            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
             continue;
-            fprintf(fp, "%s", pkt.payload);
             // ack_num = pkt.acknum;
             // seq_num = pkt.seqnum;
 
