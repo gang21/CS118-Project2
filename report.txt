@@ -1,2 +1,2 @@
-Please concisely describe your congestion control scheme here.
-No need to be verbose, brief descriptions/bullet points are preferred.
+This server client model runs a stop and wait scheme with batch size = 1. 
+The client will send a packet of the PAYLOAD_SIZE and then wait until it receives an ACK from the server before moving on to the next sequence number. 

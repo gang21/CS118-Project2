@@ -6,92 +6,15 @@
 
 #include "utils.h"
 
-void send_ack(int sockfd, struct sockaddr_in addr, unsigned short ack_num, unsigned short seq_num) {
-    int n;
-    char buffer[PAYLOAD_SIZE];
-    memcpy(buffer, (char*)&ack_num, sizeof(unsigned int));
-    struct packet pkt;
-    build_packet(&pkt, seq_num, ack_num, 0, 1, PAYLOAD_SIZE, buffer);
-
-    // printf("Sending ACK: %d\n", ack_num);
-
-    n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
-    if (n == -1) {
-        perror("Error sending ACK to the client");
-        return;
-    }
-    bzero(buffer, PAYLOAD_SIZE);
-    return;
-}
-
-void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_sockfd, struct sockaddr_in client_addr_to) {
-    int n;
-    // char buffer[PAYLOAD_SIZE];
-    socklen_t addr_size;
-    int ack_num = 0;
-    int seq_num = 0;
-    struct packet pkt;
-
-    while(1){
-        addr_size = sizeof(addr);
-        n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
-        // printRecv(&pkt);
-        if (pkt.last == 1) {
-            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
-            break; 
-        }
-        // if (pkt.acknum == 0 && seq_num == 0) {     //first pkt not a dup
-        //     fprintf(fp, "%s", pkt.payload);
-        //     send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum+1);
-        //     ack_num = pkt.acknum;
-        //     seq_num = pkt.seqnum+1;
-        //     continue;
-        // }
-        printf("RECV-------------\n");
-        printf("rec seq: %d\n", pkt.seqnum);
-        printf("rec ack: %d\n", pkt.acknum);
-        printf("svr seq: %d\n", seq_num);
-        printf("svr ack: %d\n", ack_num);
-        if (pkt.seqnum == seq_num) {    //not a dup ACK
-            fprintf(fp, "%s", pkt.payload);
-        }
-        else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
-            printf("-------------UNDER ACK\n");
-            fprintf(fp, "%s", pkt.payload);
-            // ack_num = pkt.acknum;
-            // seq_num = pkt.seqnum;
-
-        }
-        else if (pkt.seqnum < seq_num) {     // dup ack don't output file
-            printf("---------------DUP ACK\n");
-            send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
-            continue;
-        }
-        // fprintf(fp, "%s", pkt.payload);
-        send_ack(send_sockfd, client_addr_to, pkt.acknum, pkt.seqnum);
-
-        //update ACK and SEQ number
-        ack_num = pkt.acknum+1;
-        seq_num = pkt.seqnum+1;
-
-    }
-
-    fclose(fp);
-    return;
-}
-
 int main() {
     int listen_sockfd, send_sockfd;
     struct sockaddr_in server_addr, client_addr_from, client_addr_to;
     // struct packet buffer;
     socklen_t addr_size = sizeof(client_addr_from);
-    int expected_seq_num = 0;
-    int recv_len;
     struct packet ack_pkt;
-    unsigned short ack = 0;
+    struct packet send_ack;
     unsigned short seq = 0;
     int n;
-    char buffer[PAYLOAD_SIZE];
 
     // Create a UDP socket for sending
     send_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -130,30 +53,42 @@ int main() {
     FILE *fp = fopen("output.txt", "wb");
 
     // TODO: Receive file from the client and save it as output.txt
-    // write_file(listen_sockfd, client_addr_from, fp, send_sockfd, client_addr_to);
     while(1) {
         //receive from client
         n = recvfrom(listen_sockfd, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&client_addr_from, &addr_size);
-        if (n == -1) {
+        if (n < 0) {
             perror("Error sending ACK to the client");
             return -1;
         }
-        //check if last packet
-        if (ack_pkt.last == 1) {
-            break;
-        }
 
         //check if correct ack -- write to file
-        if (ack_pkt.acknum == ack) {
-            printf("payload received: %s\n", ack_pkt.payload);
-            strcpy(buffer, ack_pkt.payload);
-            fwrite(buffer, 1, strlen(buffer), fp);
-            if (ack == 0) {
-                ack = 1;
+        if (ack_pkt.seqnum == seq) {
+            // write to output.txt
+            fwrite(ack_pkt.payload, 1, ack_pkt.length, fp);
+            //send ack
+            build_packet(&send_ack, ack_pkt.seqnum, ack_pkt.seqnum, 0, 1, 0, NULL);
+            n = sendto(send_sockfd, &send_ack, sizeof(send_ack), 0, (struct sockaddr*)&client_addr_to, sizeof(client_addr_to));
+            if (n < 0) {
+                perror("Error sending ACK to client\n");
+                break;
             }
-            else {
-                ack = 0;
+            printf("the ack has been sent\n");
+            //increment seq num
+            seq++;
+
+        }
+        else {      // wrong packet
+            build_packet(&send_ack, seq-1, seq-1, 0, 1, 0, NULL);
+            n = sendto(send_sockfd, &send_ack, sizeof(send_ack), 0, (struct sockaddr*)&client_addr_to, sizeof(client_addr_to));
+            if (n < 0) {
+                perror("Error sending ACK to client\n");
+                break;
             }
+        }
+        //check if last packet
+        if (ack_pkt.last == 1) {
+            printf("last! \n");
+            break;
         }
     }
 

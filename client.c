@@ -7,107 +7,19 @@
 
 #include "utils.h"
 
-
-int listen_for_ack(int sockfd, struct sockaddr_in addr) {
-    socklen_t addr_size = sizeof(addr);
-    char buffer[PAYLOAD_SIZE];
-    struct packet pkt;
-    int n;
-    struct timeval  timeout;
-    timeout.tv_sec = 0;    // wait 0 seconds
-    timeout.tv_usec = 4000;   // wait 4000 milliseconds
-    
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-    n = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, &addr_size);
-    if (n < 0) {
-        perror("Error receiving ACK from server\n");
-        return -1;
-    }
-    if (n) {    // received ACK
-        // printRecv(&pkt);
-        return pkt.acknum;
-    }
-    return pkt.acknum;
-}
-
-void send_file_data (FILE *fp, int sockfd, struct sockaddr_in addr, int listen_sockfd, struct sockaddr_in server_addr_from) {
-    int n;
-    char buffer[PAYLOAD_SIZE];
-    int seq_no = 0;
-    int ack_no = 0;
-
-    while(fgets(buffer, PAYLOAD_SIZE, fp) != NULL) {
-        struct packet pkt;
-        build_packet(&pkt, seq_no, ack_no, 0, 0, PAYLOAD_SIZE, buffer);
-        printf("SEND----------\n");
-        printf("seq: %d\n", pkt.seqnum);
-        printf("ack: %d\n", pkt.acknum);
-        printf("data: %s", buffer);
-
-        n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
-        if (n == -1) {
-            perror("Error sending data to the server");
-            return;
-        }
-
-        //wait for ACK
-        while(1) {
-            int ack=-1;
-            ack = listen_for_ack(listen_sockfd, server_addr_from);
-            printf("RECEIVED ACK: %d\n", ack);
-            if (ack != -1 && ack == ack_no) {    //ack received, move on to next packet
-                break;
-            }
-            n = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&addr, sizeof(addr));
-                // if (n == -1) {
-                //     perror("Error sending data to the server");
-                //     return;
-                // }
-        }
-        bzero(buffer, PAYLOAD_SIZE);
-        printf("upping the ack\n");
-        seq_no++;
-        ack_no++;
-        printf("seq: %d\n", seq_no);
-        printf("ack: %d\n", ack_no);
-    }
-
-    struct packet last_packet;
-    build_packet(&last_packet, seq_no, ack_no, 1, 0, PAYLOAD_SIZE, buffer);
-    int ack = -1;
-    sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
-    while(1) {
-        ack = listen_for_ack(listen_sockfd, server_addr_from);
-        if (ack == -1) {    // error - resend data
-            printSend(&last_packet, 1);
-            n = sendto(sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
-            if (n == -1) {
-                perror("Error sending data to the server");
-                return;
-            }
-            continue;
-        }
-    }
-
-    fclose(fp);
-    return;
-
-}
-
 int main(int argc, char *argv[]) {
     int listen_sockfd, send_sockfd;
     struct sockaddr_in client_addr, server_addr_to, server_addr_from;
     socklen_t addr_size = sizeof(server_addr_to);
     struct packet pkt;
+    struct packet ack_pkt;
     // struct packet ack_pkt;
     char buffer[PAYLOAD_SIZE];
     unsigned short seq_num = 0;
     unsigned short ack_num = 0;
-    // char last = 0;
+    int last = 0;
     // char ack = 0;
     struct timeval  timeout;
-    timeout.tv_sec = 0;    // wait 0 seconds
-    timeout.tv_usec = 500000;   // wait 4000 milliseconds
     int n;
 
     // read filename from command line argument
@@ -160,86 +72,51 @@ int main(int argc, char *argv[]) {
     }
 
     // TODO: Read from file, and initiate reliable data transfer to the server
-    // send_file_data(fp, send_sockfd, server_addr_to, listen_sockfd, server_addr_from);
-    while(fread(buffer, 1, sizeof(buffer), fp) != 0) {
-        // build package
-        build_packet(&pkt, seq_num, ack_num, 0, 0, PAYLOAD_SIZE, buffer);
-        while(1) {
-            //send package
-            n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
-            printf("data sent: %s", buffer);
-            if (n == -1) {
-                perror("Error sending data to the server");
-                return -1;
-            }
+    while(last == 0) {
+        //read from buffer
+        long reset_pos = ftell(fp);
+        size_t bytesRead = fread(buffer, 1, PAYLOAD_SIZE, fp);
+        
+        //check last packet
+        if (bytesRead < PAYLOAD_SIZE) {
+            last = 1;
+        }
+        else {
+            last = 0;
+        }
+        //build packet
+        build_packet(&pkt, seq_num, seq_num, last, 0, bytesRead, buffer);
+
+        if (sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to)) < 0) {
+            perror("Error sending to server\n");
             break;
         }
-    }
 
-    // while(1) {
-    //     //read from buffer
-    //     size_t bytesRead = fread(buffer, 1, sizeof(buffer), fp);
-    //     if (bytesRead == 0)
-    //         break;
-    //     //build packet
-    //     build_packet(&pkt, seq_num, ack_num, 0, 0, PAYLOAD_SIZE, buffer);
-    //     printf("data to send: %s\n", buffer);
-    //     printf("--------------------\n");
-    //     n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
-    //     if (n = -1) {
-    //         perror("Error sending to server\n");
-    //         return -1;
-        // }
-        //send & wait for ACK    
-        // while(1) {
-        //     //send packet
-        //     n = sendto(send_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_to, sizeof(server_addr_to));
-        //     if (n = -1) {
-        //         perror("Error sending to server\n");
-        //         return -1;
-        //     }
-        //     printf("packet sent\n");
-        //     //set timeout 
-        //     setsockopt(listen_sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-        //     //listen for ack
-        //     n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_from, sizeof(server_addr_from));
-        //     if (n < 0) {
-        //         perror("Error receiving ACK from server\n");
-        //         return -1;
-        //     }
-        //     printf("ack: %d\n", pkt.acknum);
-        //     //received correct ack
-        //     if (pkt.acknum == ack_num) {
-        //         if (ack_num == 0) {
-        //             ack_num = 1;
-        //         }
-        //         else {
-        //             ack_num = 0;
-        //         }
-        //         break;
-        //     }
-        // }
-    // }
-    //sending the last packet 
-    struct packet last_packet;
-    build_packet(&last_packet, seq_num, ack_num, 1, 0, PAYLOAD_SIZE, buffer);
-    printf("data to send: %s\n", pkt.payload);
-    int ack = -1;
-    sendto(send_sockfd, &last_packet, sizeof(last_packet), 0, (struct sockaddr*)&server_addr_to, addr_size);
-    while(1) {
+        // set timeout
+        timeout.tv_sec = 0; 
+        timeout.tv_usec = 100000;
         setsockopt(listen_sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-        n = recvfrom(listen_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr_from, sizeof(server_addr_from));
-        if (n < 0) {    // error - resend data
-            printSend(&last_packet, 1);
-            n = sendto(send_sockfd, &last_packet, PAYLOAD_SIZE, 0, (struct sockaddr*)&server_addr_to, addr_size);
-            if (n == -1) {
-                perror("Error sending data to the server");
-                return -1;
-            }
+        n = recvfrom(listen_sockfd, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&server_addr_from, &addr_size);
+        if (n < 0) {
+            fseek(fp, reset_pos, SEEK_SET);
+            continue;
+        }
+
+        if (ack_pkt.acknum == seq_num && ack_pkt.ack) {
+            ack_num = 1;
+        }
+        else {
+            ack_num = 0;
+        }
+        //expected ack is correct 
+        if (ack_num) {
+            seq_num++;
+        }
+        else {      // expected ack is incorrect
+            fseek(fp, reset_pos, SEEK_SET);
             continue;
         }
     }
-
 
     printf("[SUCCES] Sending file to server\n");
     printf("[CLOSING] Disconnecting from server\n");
