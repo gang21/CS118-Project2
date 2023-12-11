@@ -1,2 +1,3 @@
-Please concisely describe your congestion control scheme here.
-No need to be verbose, brief descriptions/bullet points are preferred.
+Our project uses a primarily stop and wait protocol with batch size 1. 
+The client will send a packet and then wait for the server to send an ACK before sending the next packet. 
+If the client doesn't receive an ACK within 500000 microseconds, it will resend the packet. 
