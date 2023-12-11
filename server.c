@@ -44,10 +44,10 @@ void write_file(int listen_sockfd, struct sockaddr_in addr, FILE *fp, int send_s
         printf("rec ack: %d\n", pkt.acknum);
         printf("svr seq: %d\n", seq_num);
         printf("svr ack: %d\n", ack_num);
-        printf("data received: %s\n", pkt.payload);
+        printf("data received: \n%s\n", pkt.payload); //TODO: take away the last part
         if (pkt.seqnum == seq_num) {    //not a dup ACK
-            printf("packet payload: %s", pkt.payload);
-            fprintf(fp, "%s", pkt.payload);
+            printf("packet payloaded\n");
+            fprintf(fp, pkt.payload);
         }
         else if (pkt.seqnum > seq_num) {     // idk what this means but lets try stuff out ig
             // send_ack(send_sockfd, client_addr_to, pkt.acknum+1, pkt.seqnum+1);
